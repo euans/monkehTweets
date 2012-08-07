@@ -188,7 +188,94 @@ Revision history
 			<cfset checkStatusCode(cfhttp) />
 		<cfreturn cfhttp.FileContent />
 	</cffunction>
-
+	
+	<cffunction name="checkStatusCode" access="public" output="false" hint="I check the status code from all API calls">
+		<cfargument name="data" 	required="true" 	type="struct" 					hint="The data returned from the API." />
+		<cfargument name="format" 	required="false" 	type="string" default="json" 	hint="The return format of the data. JSON." />
+			<cfset var strSuccess 		= false />
+			<cfset var strMessage 		= '' />
+			<cfset var stuErrInfo		= StructNew() />
+			<cfset var arrErrSearch		= ArrayNew(1) />
+			<cfset var reqXML			= '' />
+			<cfset var stuJSONResponse	= '' />
+				<cfswitch expression="#arguments.data.Statuscode#">
+					<cfcase value="200 OK">
+						<cfset strSuccess = true />
+						<cfset strMessage = 'Success!' />
+					</cfcase>
+					<cfcase value="304 Not Modified">
+						<cfset strSuccess = false />
+						<cfset strMessage = 'There was no new data to return.' />
+					</cfcase>
+					<cfcase value="400 Bad Request">
+						<cfset strSuccess = false />
+						<cfset strMessage = 'The request was invalid.' />
+					</cfcase>
+					<cfcase value="401 Unauthorized">
+						<cfset strSuccess = false />
+						<cfset strMessage = 'Authentication credentials were missing or incorrect.' />
+					</cfcase>
+					<cfcase value="403 Forbidden">
+						<cfset strSuccess = false />
+						<cfset strMessage = 'The request is understood, but it has been refused.' />
+					</cfcase>
+					<cfcase value="404 Not Found">
+						<cfset strSuccess = false />
+						<cfset strMessage = 'The URI requested is invalid or the resource requested, such as a user, does not exist.' />
+					</cfcase>
+					<cfcase value="406 Not Acceptable">
+						<cfset strSuccess = false />
+						<cfset strMessage = 'Returned by the Search API when an invalid format is specified in the request.' />
+					</cfcase>
+					<cfcase value="420 Enhance Your Calm">
+						<cfset strSuccess = false />
+						<cfset strMessage = 'Returned by the Search and Trends API  when you are being rate limited.' />
+					</cfcase>
+					<cfcase value="500 Internal Server Error">
+						<cfset strSuccess = false />
+						<cfset strMessage = 'Something is broken. Please post to the group so the Twitter team can investigate.' />
+					</cfcase>
+					<cfcase value="502 Bad Gateway">
+						<cfset strSuccess = false />
+						<cfset strMessage = 'Twitter is down or being upgraded.' />
+					</cfcase>
+					<cfcase value="503 Service Unavailable">
+						<cfset strSuccess = false />
+						<cfset strMessage = 'The Twitter servers are up, but overloaded with requests. Try again later.' />
+					</cfcase>
+				</cfswitch>
+				<cfif not strSuccess>
+					<cfset stuErrInfo.error_message 	= arguments.data.Statuscode & '-' & strMessage />
+					<cfset stuErrInfo.api_Info 			= StructNew() />
+					<cfswitch expression="#arguments.format#">
+						<cfcase value="json">
+							<cfif isJSON(arguments.data.FileContent)>
+								<cfset stuJSONResponse = deserializeJSON(arguments.data.FileContent.toString()) />
+								<cfif structKeyExists(stuJSONResponse,'error')>
+									<cfset stuErrInfo.api_Info.error	=	stuJSONResponse.error />
+								</cfif>
+							</cfif>
+							<cfset stuErrInfo.full_Request			=	arguments.data />
+						</cfcase>
+						<cfdefaultcase>
+							<cfif isXML(arguments.data.FileContent)>
+								<cfset arrErrSearch						= xmlSearch(arguments.data.FileContent,'hash/error') />
+								<!--- Mr Phipps was here - thanks to David for finding the issue here with CF8.01 --->
+								<!---<cfset stuErrInfo.api_Info.request 	= xmlSearch(arguments.data.FileContent,'hash/request')[1].XmlText />--->
+								<cfset reqXML 							= xmlSearch(arguments.data.FileContent,'hash/request') />
+								<cfset stuErrInfo.api_Info.request 		= reqXML[1].XmlText />
+								<cfif arrayLen(arrErrSearch)>
+									<cfset stuErrInfo.api_Info.error	=	arrErrSearch[1].XmlText />
+								</cfif>
+							</cfif>
+							<cfset stuErrInfo.full_Request			=	arguments.data />
+						</cfdefaultcase>
+					</cfswitch>
+					<cfdump var="#stuErrInfo#">
+					<cfabort>
+				</cfif>
+	</cffunction>	
+	
 	<!--- OAuth specific methods here --->
 
 	<!--- MUTATORS / SETTERS --->
@@ -214,7 +301,7 @@ Revision history
 		<cfargument name="url" 			type="string" 	displayname="url" 		hint="URL to request" 		required="true" />
 		<cfargument name="method" 		type="string" 	displayname="method" 	hint="Method of HTTP Call" 	required="true" />
 		<cfargument name="parameters" 	type="struct" 	displayname="method" 	hint="HTTP parameters" 		required="false" default="#structNew()#" />
-			<cfset var returnStruct = {} />
+			<cfset var returnStruct = StructNew() />
 
 				<cfif structKeyExists(arguments.parameters,'params')>
 					<cfset structAppend(arguments.parameters,arguments.parameters['params']) />
@@ -244,7 +331,7 @@ Revision history
 	<cffunction name="queryString2struct" displayname="queryString2Struct" description="Turns a query string into a struct." access="private" output="false" returntype="Struct" >
 		<cfargument name="queryString"	type="string" displayname="queryString" hint="Query String to Decihper" required="true" />
 		<cfscript>
-			var returnStruct 	= {};
+			var returnStruct 	= StructNew();
 			var localPair		= '';
 			var localKey		= '';
 			var localValue		= '';
@@ -259,19 +346,19 @@ Revision history
 			return returnStruct;
 		</cfscript>
 	</cffunction>
-
+    
 	<!--- PUBLIC FUNCTIONS --->
 	<cffunction name="getAuthorisation" access="public" output="false" returntype="struct" hint="I make the call to Twitter to request authorisation to access the account.">
 		<cfargument name="callBackURL"	type="string" hint="The URL to hit on call back from authorisation" required="false" default="" />
 		<cfscript>
-			var returnStruct					= {};
-			var requestToken					= {};
-			var oAuthKeys						= {};
+			var returnStruct					= StructNew();
+			var requestToken					= StructNew();
+			var oAuthKeys						= StructNew();
 			var callBackURLEncoded				= '';
 			var AuthURL							= '';
 			var twitRequest						= '';
 
-			var stuParams						= {};
+			var stuParams						= StructNew();
 
 				stuParams['oauth_callback']		= arguments.callBackURL;
 
@@ -315,11 +402,11 @@ Revision history
 		<cfargument name="requestSecret"	type="string" 	required="true" hint="Request Token Secret needed to get Access Token." />
 		<cfargument name="verifier" 		type="string"	required="true" hint="I am the oauth_verifier string returned from the authentication request." />
 		<cfscript>
-			var returnStruct		= {};
-			var accessToken			= {};
-			var oAuthKeys			= {};
+			var returnStruct		= StructNew();
+			var accessToken			= StructNew();
+			var oAuthKeys			= StructNew();
 			var twitRequest			= '';
-			var stuParams			= {};
+			var stuParams			= StructNew();
 
 				stuParams['oauth_verifier']		= arguments.verifier;
 
@@ -356,13 +443,13 @@ Revision history
 		<cfscript>
 			var requestResult		= '';
 			var twitRequest			= '';
-			var stuParams			= {};
+			var stuParams			= StructNew();
 			var stuParameters		= '';
 				/* If we're sending through media to upload, we need to keep the parameters empty
 				 and not send anything through that would break the multipart request
 				*/
 				if (structKeyExists(arguments.parameters,'media[]')) {
-					stuParameters	=	{};
+					stuParameters	=	StructNew();
 				} else {
 					stuParameters	=	arguments.parameters;
 				}
@@ -393,7 +480,7 @@ Revision history
 		<cfargument name="httpmethod"		type="string"	required="false"	displayname="httpmethod"		hint="HTTP Method"	default="GET" />
 		<cfargument name="parameters"		type="struct"	required="false"	displayname="parameters"		hint="Parameters for the url to the service"	default="#structNew()#" />
 		<cfscript>
-			var returnStruct	= {};
+			var returnStruct	= StructNew();
 			var authToken 		= '';
 			var twitRequest			= '';
 
@@ -433,7 +520,7 @@ Revision history
 
 	<cffunction name="clearEmptyParams" access="public" output="false" hint="I accept the structure of arguments and remove any empty / nulls values before they are sent to the OAuth processing.">
 		<cfargument name="paramStructure" required="true" type="Struct" hint="I am a structure containing the arguments / parameters you wish to filter." />
-			<cfset var stuRevised = {} />
+			<cfset var stuRevised = StructNew() />
 				<cfloop collection="#arguments.paramStructure#" item="local.key">
 					<cfif len(arguments.paramStructure[key])>
 						<cfset structInsert(stuRevised, lcase(key), arguments.paramStructure[key], true) />
@@ -455,7 +542,7 @@ Revision history
 					// Check if a file is being uploaded
 					if(structKeyExists(arguments.parameters, 'media[]')) {
 						// If so, check the mimetype is acceptable
-						if(!checkMedia(file=arguments.parameters['media[]'])) {
+						if(not checkMedia(file=arguments.parameters['media[]'])) {
 							// If not, set to false
 							isOKToProceed	=	false;
 							strReturn		=	'The media you are trying to upload seems to be incompatible or an Incorrect file type.';
