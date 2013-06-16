@@ -184,7 +184,7 @@ Revision history
 	<cffunction name="makeGetCall" access="package" output="false" returntype="Any" hint="I am the function that makes the cfhttp GET requests">
 		<cfargument name="URLEndpoint" 	required="true" type="string" hint="The URL to call for the GET request." />
 			<cfset var cfhttp	 = '' />
-			<cfhttp url="#arguments.URLEndpoint#" method="get" useragent="monkehTweets" />
+			<cfhttp url="#arguments.URLEndpoint#" method="get" useragent="monkehTweets" timeout="15" />
 			<cfset checkStatusCode(cfhttp) />
 		<cfreturn cfhttp.FileContent />
 	</cffunction>
@@ -221,7 +221,7 @@ Revision history
 					<cfset structDelete(arguments.parameters,'params') />
 				</cfif>
 
-				<cfhttp url="#arguments.url#" method="#arguments.method#" result="returnStruct" multipart="true">
+				<cfhttp url="#arguments.url#" method="#arguments.method#" result="returnStruct" multipart="true" timeout="15">
 					<cfif structKeyExists (arguments.parameters,'media[]') and arguments.method is 'POST'>
 						<cfhttpparam type="file" file="#arguments.parameters['media[]']#" name="media[]" />
 					</cfif>
