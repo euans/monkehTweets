@@ -447,6 +447,7 @@ Revision history
 		<cfargument name="httpMethod" 	required="true" 	type="String" 	default="POST"			hint="I am the method of the authenticated request. GET or POST." />
 		<cfargument name="parameters" 	required="false" 	type="Struct"	default="#StructNew()#" hint="I am a structure of parameters for the request." />
 		<cfargument name="checkHeader"	required="false"	default="false" type="boolean"	hint="If set to true, I will abort the request and return the headers and sent information for debugging." />
+		<cfargument name="returnRaw"	required="false"	default="false" type="boolean"	hint="If set to true, I will return the raw file content." />
 			<cfset var twitRequest		= 	{} />
 			<cfset var isOKToProceed	=	true />
 			<cfset var strReturn 		= 	'' />
@@ -473,7 +474,11 @@ Revision history
 						if(arguments.checkHeader) {
 							strReturn = twitRequest.responseHeader;
 						} else {
-							strReturn = handleReturnFormat(twitRequest.fileContent);
+							if(arguments.returnRaw) {
+								strReturn = twitRequest.fileContent.toString();
+							} else {
+								strReturn = handleReturnFormat(twitRequest.fileContent);
+							}
 						}
 					}
 				</cfscript>
